@@ -1,5 +1,17 @@
 ## Simple thermometer
 
+![image of the thing](the_thermometer.jpg)
+
+```
+$ mosquitto_sub -L mqtt://myuser:mypassword@my_mqtt_server/thermometer -i test
+{"t": "29.2", "h":"38.9"}
+{"t": "29.2", "h":"38.9"}
+{"t": "29.2", "h":"38.8"}
+{"t": "29.2", "h":"38.8"}
+{"t": "29.2", "h":"38.9"}
+...
+```
+
 Win11/WSL2 note: We will need to access the files of this repo from Windows too, so
 clone/move this repo to some folder under `/mnt/c/Users/<your win username>`.
 
