@@ -10,15 +10,16 @@ but then you can use this as a platform for future MicroPython projects too.
 ### Materials
 
 - NodeMCU module, that already contains:
-    ESP8266 uC
-    CH340G USB-serial converter
-    DS1117 5V-to-3.3V voltage regulator, fed from the USB
-    LED on GPIO2
-    "Reset" button on RESET (with pull-up resistor, active low)
-    "Flash" button on GPIO0 (with pull-up resistor, active low)
-    Pull-up resistor on GPIO15
+    - ESP8266 uC
+    - CH340G USB-serial converter
+    - DS1117 5V-to-3.3V voltage regulator, fed from the USB
+    - LED on GPIO2
+    - "Reset" button on RESET (with pull-up resistor, active low)
+    - "Flash" button on GPIO0 (with pull-up resistor, active low)
+    - Pull-up resistor on GPIO15
 
 - SHT11 thermometer and hygrometer module
+
     Or DHT11, or SHT22, or DHT22, or AM2302, they have the same pinout and talk the same protocol,
     the difference is only in the maximal sampling rate
 
@@ -37,9 +38,21 @@ So, aiming for a *simple* thermometer, let's continue with the pre-manufactured 
 
 - Flashing tool: [esptool.py](https://pypi.org/project/esptool/)
 - Platform: [MicroPython](https://micropython.org/download/ESP8266_GENERIC/)
+- A serial terminal (I recommend `picocom`)
 - A few authentic home-grown python scripts :)
 
 - An MQTT server somewhere in your LAN (I recommend `mosquitto`)
+
+
+A summary of what we will do:
+- Set up the serial port, so the Linux in WSL2 sees it too
+- Create a backup of the original flash content of the NodeMCU
+- Re-flash the NodeMCU with MicroPython
+- Using the serial terminal enable the WebREPL (network console) of MicroPython
+- Customize `config.py` with our own actual parameters
+- Using WebREPL upload our firmware scripts to NodeMCU
+
+And now the details :)
 
 
 ## Setting up NodeMCU
@@ -67,49 +80,63 @@ NOTE: The PowerShell steps are needed only if you're using WSL2 on Win11, on nat
 - Open a PowerShell prompt
 
 - PowerShell: Execute `usbipd list`
+
   You should see something like `2-2 1a86:7523  USB-SERIAL CH340 (COM5)`, note that `2-2`, that is the bus ID of the device.
 
 - Open a WSL2 bash prompt
 
 - Bash: `sudo /etc/init.d/udev restart`
+
   (Because in a stock WSL2 setup it's not started automatically.)
 
 - If it's the first time with NodeMCU:
     - Open another PowerShell as Administrator
     - Execute `usbipd bind --busid 2-2`
+
       (This lets this device forwarded to the WSL2 domain.)
     - Close this Administrator PowerShell
 
     - Bash: Execute `sudo su -`
     - Create the new file `/etc/udev/rules.d/51-ch340g.rules`
     - Add this content:
+
 ```
 # NodeMCU onboard usb serial converter
 ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE="660", GROUP="users", SYMLINK+="ttyNodeMCU"
 ```
+
       (This tells `udev` that when the device is attached, create the device node `/dev/ttyUSB?`,
       owned by "root:users" with permissions 660, and to create a symlink `/dev/ttyNodeMCU` to it.)
+
     - Execute `udevadm control --reload`
     - Exit the root shell
 
 - PowerShell: `usbipd attach --wsl --busid 2-2` 
+
   Keep this PowerShell active
+
   (The Linux in the WSL2 domain will now sense this as if you just connected the device.)
 
 - Bash: `lsusb`
+
   You should see something like `Bus 001 Device 002: ID 1a86:7523 QinHeng Electronics CH340 serial converter`
 
-- Bask: `ls -l /dev/ttyUSB0`
+- Bash: `ls -l /dev/ttyUSB0`
+
   You should see `crw-rw---- 1 root users 188, 0 Aug  5 17:22 /dev/ttyUSB0`
 
 - Bash: `ls -l /dev/ttyNodeMCU`
+
   You should see `lrwxrwxrwx 1 root root 7 Aug  5 17:22 /dev/ttyNodeMCU -> ttyUSB0`
 
 - Now you're ready to work with the NodeMCU module
 
 - At the end, when you no longer need it:
+
   PowerShell: `usbipd detach --busid 2-2` 
+
   (The Linux in the WSL2 domain will now sense this as if you just disconnected the device.)
+
   You may close the PowerShell now.
 
 
@@ -295,7 +322,8 @@ from the computer and plug it into a plain USB charger.
 
 ### Installing our "framework"
 
-Our "framework" consists of two files: `boot.py` and `config.py` (and the application will go to `code.py`).
+Our "framework" consists of two files: [`boot.py`](boot.py) and [`config.py`](config.py.sample)
+(and the application will go to [`code.py`](code.py)).
 
 By default MicroPython initializes the network and connects to the last used WiFi by using
 persisted credentials automagically, which is nice as long as it doesn't change and is available.
@@ -342,19 +370,20 @@ If not, then the LED stays on, you see an open AP `NodeMCU`, connect to that, th
 
 ### The application
 
-At this point we have no `code.py`, so of course there is nothing to run, but `boot.py` is robust enough to live with
-that, so we still have WiFi connection and a WebREPL (and a `Failed to import code: no module named 'code'` message
-on the serial console).
+At this point we have no `code.py` on the NodeMCU, so of course there is nothing to run, but `boot.py` is robust enough
+to live with that, so we still have WiFi connection and a WebREPL (and a `Failed to import code: no module named 'code'`
+message on the serial console).
 
 BTW, this will happen if we make any mistake in our future `code.py`, so even if it fails to import, and we don't need
 a serial connection to fix it...
 
-So, we need to upload `code.py`, but first let's take a look at what it actually does :)
+So, we need to upload [`code.py`](code.py), but first let's take a look at what it actually does :)
 
 Luckily, the ESP8266 port of MicroPython already contains modules for:
 
 - Interfacing an SHT/DHT sensor: [dht](https://docs.micropython.org/en/latest/esp8266/quickref.html#dht-driver)
-- A simplistic MQTT module: [umqtt.simple](https://pypi.org/project/micropython-umqtt.simple) [source](https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple)
+- A simplistic MQTT module: [umqtt.simple](https://pypi.org/project/micropython-umqtt.simple) (here's the
+[source](https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple))
 
 The `umqtt.simple` module isn't really over-documented, but take a look at [`example_pub.py`](https://github.com/micropython/micropython-lib/blob/master/micropython/umqtt.simple/example_pub.py) and you'll see that it doesn't need it either.
 
@@ -394,7 +423,7 @@ As I intend this project as a base for future projects too, it's worth to unders
 
 To boot from flash, GPIO0 and GPIO2 are pulled up and GPIO15 is pulled down by 10k external resistors. To boot from serial (like during flashing) GPIO0 is pulled down hard by the "Flash" button.
 
-This means that these pins cannot be used for anything would pull them away during boot, or for anything that couldn't take these static pull ups/downs.
+This means that these pins cannot be used for anything that would pull them away during boot, or for anything that couldn't take these static pull ups/downs.
 
 3. GPIO0: boot mode select (with a pull-up resistor and a pull-down button)
 
@@ -414,16 +443,17 @@ The best purpose I found for this is to use it as a serial debug/log output, or 
 
 Again, we can't hook anything to it that would pull it away during power-up, but otherwise it's free for use.
 
-Although, as it already has a pull-down resistor, so using it for a pull-up button is a good idea, but there is one more thing.
+Although, as it already has a pull-down resistor, using it for a pull-up button is a good idea, but there is one more thing.
 
 If we're interfacing with a peripheral that uses serial communication (eg. a GPS), using UART0 is a bad idea, because during boot and during flashing a lot of data is sent through it, and it may interfere with this peripheral.
 
-However, ESP8266 has a feature to swap U0TXD/GPIO1 and U0RXD/GPIO3 with GPIO15 and GPIO13, so we can hook the peripheral to those, and *after the boot has finished* initiate this swapping, so no boot logs or flashing data hits the peripheral or is corrupted by its response.
+However, ESP8266 has a feature to swap U0TXD/GPIO1 and U0RXD/GPIO3 with GPIO15 and GPIO13, so we can hook the peripheral to those, and *after the boot has finished* do we initiate this swapping, so no boot logs or flashing data hits the peripheral or is corrupted by its response.
 
 So I'd dedicate this GPIO15 as the TXD of this *isolated* serial communication.
+
 NOTE: To activate this, specify the `.., tx=15, rx=13, ...` parameters to [UART](https://docs.micropython.org/en/latest/library/machine.UART.html#machine.UART.init).
 
-NOTE: ESP8266 has a hardware-implemented SPI port that also uses this pin, so if we need SPI, then this may be used for that. May but not must, as a software-SPI can be implemented easily on any other pins too.
+NOTE: ESP8266 has a hardware-implemented SPI port that also uses this pin, so if we need HSPI, then this may be used for that. May but not must, as a software-SPI can be implemented easily on any other pins too.
 
 6. GPIO13: alternative pin for U0RXD
 
@@ -433,11 +463,11 @@ Otherwise, it's absolutely free for any arbitrary use
 
 7. GPIO16: wake-up from deep sleep
 
-This pin is internally implemented in a different way, so ESP8266 can only pull it down, but not up. This could be remedied by adding an external pull-up resistor of course, but it's better to use it either as a wake-up signal (if we need that) or as an input (if we don't)
+This pin is internally implemented in a different way, so ESP8266 can only pull it down, but not up. This could be remedied by adding an external pull-up resistor of course, but it's better to use it either as a wake-up signal (if we need that) or driving some externally pulled-up common rail, or as an input (if we don't)
 
 8. GPIO1: U0TXD
 
-This is output of the the serial port UART0, so it is heavily used during flashing, and calso as output to transmit the boot loader garbage during boot.
+This is output of the the serial port UART0, so it is heavily used during flashing, and also as output to transmit the boot loader garbage during boot.
 
 We can't hook up anything here that would disrupt the flashing data, or that couldn't take this data, so I'd recommend only some non-essential output like a status LED
 
@@ -453,7 +483,7 @@ No extra quirks, these pins are ready for anything :D
 
 11. GPIO12 to GPIO15
 
-These can be used by the hardware SPI interface, but please note that it collides with the already mentioned *isolated* UART0 pins, so it's either-or.
+These can be used by the HSPI interface, but please note that it collides with the already mentioned *isolated* UART0 pins, so it's either-or.
 
 
 ### Summary
@@ -463,10 +493,10 @@ These can be used by the hardware SPI interface, but please note that it collide
 - GPIO2: Re-use it as debug log output, or non-essential output, or as an input with a pull-down button
 - GPIO3: Non-essential output like some LED
 - GPIO4 and GPIO5: *free for use*
-- GPIO12: Hardware SPI, or *free for use*
+- GPIO12: HSPI, or *free for use*
 - GPIO13: Alternate U0RXD for *isolated* serial, otherwise *free for use*
-- GPIO14: Hardware SPI, or *free for use*
-- GPIO15: Alternate U0TXD for *isolated* serial, or hardware SPI, otherwise *free for use*
+- GPIO14: HSPI, or *free for use*
+- GPIO15: Alternate U0TXD for *isolated* serial, or HSPI, otherwise *free for use*
 - GPIO16: Wake-up input, or *free for use*, especially for common-rail pull-down purposes
 
 Therefore, for this thermometer data line we could use GPIO4, GPIO5, or any of GPIO12 to GPIO15, so for simplicity's sake let's use GPIO4.
