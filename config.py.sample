@@ -1,0 +1,16 @@
+wifi_led_gpio = 2
+
+wifi_ssid = "<your wifi ssid>"
+wifi_password = "<your wifi password>"
+wifi_timeout_sec = 10
+
+wifi_ap_ssid = "NodeMCU"
+
+dht_gpio = 4
+
+mqtt_server = "<your mqtt server>" # the mqtt server for use by the application
+mqtt_client_id = b"thermometer"
+mqtt_user = b"..."
+mqtt_password = b"..."
+mqtt_topic = b"thermometer" # topic to send the measurements to
+
