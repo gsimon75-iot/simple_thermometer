@@ -14,7 +14,16 @@ def reload(mod):
   gc.collect()
   return __import__(mod_name)
 
-wifi_led = machine.Pin(config.wifi_led_gpio, machine.Pin.OUT, value=1)
+
+if config.wifi_led_gpio > 0:
+    wifi_led = machine.Pin(config.wifi_led_gpio, machine.Pin.OUT, value=1)
+    wifi_led_inverse = False
+elif config.wifi_led_gpio < 0:
+    wifi_led = machine.Pin(-config.wifi_led_gpio, machine.Pin.OUT, value=0)
+    wifi_led_inverse = True
+else:
+    wifi_led = None
+    wifi_led_inverse = False
 
 print("switching to STA")
 network.WLAN(network.AP_IF).active(False)
@@ -26,13 +35,16 @@ wlan.active(True)
 wlan.connect(config.wifi_ssid, config.wifi_password)
 for check in range(config.wifi_timeout_sec << 1):
     if wlan.isconnected():
-        wifi_led.value(1)  # off
+        if wifi_led is not None:
+            wifi_led.value(1 if wifi_led_inverse else 0)  # off
         break
-    wifi_led.value(check & 1)
+    if wifi_led is not None:
+        wifi_led.value(check & 1)
     time.sleep_ms(500)
 else:
     print("failed STA, switching to AP")
-    wifi_led.value(0)  # on
+    if wifi_led is not None:
+        wifi_led.value(0 if wifi_led_inverse else 1)  # on
     wlan.active(False)
     wlan = network.WLAN(network.AP_IF)
     wlan.active(True)

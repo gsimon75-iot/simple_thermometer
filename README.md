@@ -76,8 +76,8 @@ RXD and TXD pins of the ESP8266:
 CH340G      ESP8266
  3  TxD     22 U0TxD    via 470 Ohm
  4  RxD     21 U0RxD    via 470 Ohm
-13  #DTR     1 #RST     via inverter, ie. #DTR=1 -> #RST=0  -> reset
-14  #RTS    18 GPIO0    via inverter, ie. #RTS=1 -> GPIO0=0 -> boot from serial
+13  #DTR    18 GPIO0    via inverter, ie. #RTS=1 -> GPIO0=0 -> boot from serial
+14  #RTS     1 #RST     via inverter, ie. #DTR=1 -> #RST=0  -> reset
 ```
 
 This pinout is exactly compatible with what `esptool.py` expects :)
@@ -435,7 +435,7 @@ As I intend this project as a base for future projects too, it's worth to unders
 
 To boot from flash, GPIO0 and GPIO2 are pulled up and GPIO15 is pulled down by 10k external resistors. To boot from serial (like during flashing) GPIO0 is pulled down hard by the "Flash" button.
 
-This means that these pins cannot be used for anything that would pull them away during boot, or for anything that couldn't take these static pull ups/downs.
+This means that these pins cannot be used for anything that would pull them away during power-up, or for anything that couldn't take these static pull ups/downs.
 
 3. GPIO0: boot mode select (with a pull-up resistor and a pull-down button)
 
@@ -556,3 +556,97 @@ because it should get the messages too :).
 - [dht module](https://docs.micropython.org/en/latest/esp8266/quickref.html#dht-driver)
 - [umqtt.simple](https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple)
 
+
+## ESP-01 Notes
+
+### Pinout
+
+```
+|         |
+| 1 2 3 4 |
+| 5 6 7 8 |
++---------+
+```
+
+IMPORTANT: Some docs number the lower row in the other direction, I'm following the original AI-Thinker numbering.
+
+
+### Setup and boot
+
+`boot mode: (x, y)` -> x = (GPIO15, GPIO0, GPIO2)
+
+- 1: - 470 Ohm - GND
+- 2: GPIO2
+- 3: GPIO0, 1,NC=normal boot (mode 3), 0=uart boot (mode 1)
+- 4: RxD
+- 5: TxD, - 2k2 - blue LED - Vcc
+- 6: EN, 1=normal operation, NC,0=no operation
+- 7: Reset, 1,NC=normal operation, 0=no boot, 0->1: reset
+- 8: Vcc = 3.3V
+
+NOTE: What is the purpose of that 470 Ohm between GND and chip-GND?
+
+For static pull-ups (EN, GPIO2) 4.7k is adequate. Don't use too small values, as GPIO2=U1TXD is a (garbage) output
+during boot, and it would be overdriven when low.
+
+Also don't try to feed EN and GPIO2 from the same resistor, as when GPIO2 is sending the bootloader output, it would
+pull down EN at the first 0 :)
+
+For normal operation, the minimal setup is: GND, Vcc, RxD, TxD, EN=1
+
+
+```
+$ esptool.py -p /dev/ttyFT232H chip_id
+Detecting chip type... ESP8266
+Chip is ESP8266EX
+Features: WiFi
+Crystal is 26MHz
+MAC: ??:??:??:??:??:??
+Chip ID: 0x????????
+
+$ esptool.py -p /dev/ttyFT232H flash_id
+Manufacturer: d8
+Device: 4014
+Detected flash size: 1MB
+```
+
+NOTE: For this module we need the 1M version of MicroPython.
+
+## GPIO arrangement
+
+The blue LED is wired between TxD (GPIO1) and Vcc via 2.2k,
+so it's on when GPIO0=0.
+
+There is no in-circuit programming here (the module must be
+disconnected from the application circuitry for flashing),
+so we are free to re-use TxD and RxD, and also the initial values
+of GPIO0 and 2 can (and must) be always 1.
+
+We have 4 GPIO lines:
+
+- GPIO0
+
+    At power-up it must not be low (i.e. is 1 or NC).
+
+- GPIO1 = TxD
+
+    The blue LED is connected here, and it's junk output at boot, so we can't sink too much current through it, and as
+    an input it's pulled up. Not much use, honestly, except for the LED.
+
+- GPIO2
+
+    At power-up it must not be low (i.e. is 1 or NC), and it's junk output at boot.
+
+- GPIO3 = RxD
+
+    Available without restrictions
+
+
+## config.py differences
+
+So, the LED is on GPIO1 and let's connect the sensor to GPIO3=RXD
+
+```
+wifi_led_gpio = 1 # TxD
+dht_gpio = 3 # RxD
+```

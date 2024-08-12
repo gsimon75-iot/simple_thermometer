@@ -1,4 +1,4 @@
-wifi_led_gpio = 2
+wifi_led_gpio = -2 # GPIO2, inverted control
 
 wifi_ssid = "<your wifi ssid>"
 wifi_password = "<your wifi password>"
