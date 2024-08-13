@@ -575,7 +575,7 @@ IMPORTANT: Some docs number the lower row in the other direction, I'm following 
 
 `boot mode: (x, y)` -> x = (GPIO15, GPIO0, GPIO2)
 
-- 1: - 470 Ohm - GND
+- 1: GND
 - 2: GPIO2
 - 3: GPIO0, 1,NC=normal boot (mode 3), 0=uart boot (mode 1)
 - 4: RxD
@@ -584,7 +584,9 @@ IMPORTANT: Some docs number the lower row in the other direction, I'm following 
 - 7: Reset, 1,NC=normal operation, 0=no boot, 0->1: reset
 - 8: Vcc = 3.3V
 
-NOTE: What is the purpose of that 470 Ohm between GND and chip-GND?
+Vcc - red LED - 4k7 - GND
+
+(7=Reset) - 470 - 12k up, 24k down - chip Reset
 
 For static pull-ups (EN, GPIO2) 4.7k is adequate. Don't use too small values, as GPIO2=U1TXD is a (garbage) output
 during boot, and it would be overdriven when low.
@@ -647,6 +649,6 @@ We have 4 GPIO lines:
 So, the LED is on GPIO1 and let's connect the sensor to GPIO3=RXD
 
 ```
-wifi_led_gpio = 1 # TxD
+wifi_led_gpio = -1 # TxD
 dht_gpio = 3 # RxD
 ```
