@@ -5,7 +5,10 @@ from umqtt.simple import MQTTClient
 
 import config
 
-dht = dht.DHT22(machine.Pin(config.dht_gpio))
+# detach REPL if an uart pin is used for sensor
+if config.dht_gpio in (1, -1, 3, -3):
+    import os
+    os.dupterm(None, 1)
 
 mqtt = MQTTClient(
     client_id=config.mqtt_client_id,
@@ -15,14 +18,19 @@ mqtt = MQTTClient(
 
 do_connect = True
 
+sensor = dht.DHT22(machine.Pin(config.dht_gpio))
 
 while True:
     time.sleep_ms(2000)
 
     print("measuring")
-    dht.measure()
+    try:
+        sensor.measure()
+    except Exception as e:
+        print(f"measurement failed: {e.__class__} {e}")
+        continue
 
-    msg = f'{{"t": "{dht.temperature()}", "h":"{dht.humidity()}"}}'
+    msg = f'{{"t": "{sensor.temperature()}", "h":"{sensor.humidity()}"}}'
     print(msg)
 
     if do_connect:

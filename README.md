@@ -379,6 +379,15 @@ and you can reload `webrepl.html` and connect to it via its new IP address.
 If not, then the LED stays on, you see an open AP `NodeMCU`, connect to that, then connect WebREPL to
 `ws://192.168.4.1:8266` and try to fix and upload that `config.py` :)
 
+BTW fixing boot/init problems, a useful copy-paste code for starting the wifi from a serial console:
+```
+import network, config, webrepl
+wlan = network.WLAN(network.STA_IF)
+wlan.connect(config.wifi_ssid, config.wifi_password)
+wlan.isconnected()
+webrepl.start()
+```
+
 
 ### The application
 
